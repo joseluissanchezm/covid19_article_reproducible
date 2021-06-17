@@ -4,6 +4,7 @@ library(latex2exp)
 library(ggplot2)
 library(lubridate)
 source("CODE/functions/models_definition.R")
+source("CODE/functions/forecast_plot.R", encoding = "UTF8")
 load("article_results/list_output_datesokFinal.rdata")
 # BEATRIZs MODEL ------
 results_beatriz = list.dirs("article_results/ArticuloResultados", recursive = TRUE)  %>%
@@ -69,43 +70,138 @@ params = params[params$iso == iso,]
 dates_test = test_sets$last_date_train
 
 results_jose = lapply(dates_test,
-             function(date) {
-               dg = df[df$date <= date,]
-               
-               # Initialize model ------
-               model = ecm$new(
-                 data = dg, K = params$K, r = params$r, seasonal = params$seasonal)
-               
-               # Train model -----
-               model$train()
-               
-               # Fitted series
-               fitted = model$fitted[c("date", "confirmed")]
-               fitted = filter(fitted, date >= as.Date("2020-06-24"))
-               fitted$last_date_train = date
-               fitted$type = "ajuste"
-               fitted = rename(fitted, value = confirmed)
-               # Puntual predict
-               punt_pred = model$predict(h = 15)
-               punt_pred$last_date_train = date
-               punt_pred$type = "prediccion"
-               punt_pred = punt_pred[c("date", "confirmed", "last_date_train", "type")]
-               punt_pred = rename(punt_pred, value = confirmed)
-               
-               return(bind_rows(fitted, punt_pred))
-             })
+                      function(date) {
+                        dg = df[df$date <= date,]
+                        
+                        # Initialize model ------
+                        model = ecm$new(
+                          data = dg, K = params$K, r = params$r, seasonal = params$seasonal)
+                        
+                        # Train model -----
+                        model$train()
+                        
+                        # Fitted series
+                        fitted = model$fitted[c("date", "confirmed")]
+                        fitted = filter(fitted, date >= as.Date("2020-06-24"))
+                        fitted$last_date_train = date
+                        fitted$type = "ajuste"
+                        fitted = rename(fitted, value = confirmed)
+                        # Puntual predict
+                        punt_pred = model$predict(h = 15)
+                        punt_pred$last_date_train = date
+                        punt_pred$type = "prediccion"
+                        punt_pred = punt_pred[c("date", "confirmed", "last_date_train", "type")]
+                        punt_pred = rename(punt_pred, value = confirmed)
+                        
+                        return(bind_rows(fitted, punt_pred))
+                      })
 results_jose = bind_rows(results_jose)
 results_jose$model = "Error correction model (MATGEN)"
 
+# AUTOARIMA MODEL ------
+library(forecast)
+iso = "MD"
+last_date_use = as.Date("2021-04-01")
+df = readRDS("data_app/historical.rds")
+params = readRDS("data_app/params_isos.rds")
+df = df[df$iso == iso,]
+params = params[params$iso == iso,]
+
+
+auto_model = NULL
+dates_test = test_sets$last_date_train
+
+auto_model = auto.arima(ts(df[df$date <= dates_test[1],]$confirmed, frequency = 7), lambda = "auto")
+
+results_auto = lapply(dates_test,
+                      function(date) {
+                        dg = df[df$date <= date,]
+                        
+                        # Initialize model ------
+                        auto_model = Arima(ts(dg$confirmed, frequency = 7),
+                                           model = auto_model)
+                        
+                        
+                        
+                        # Fitted series
+                        fitted = data.frame(
+                          date = dg$date, 
+                          confirmed = auto_model$fitted %>% as.numeric())
+                        fitted = filter(fitted, date >= as.Date("2020-06-24"))
+                        fitted$last_date_train = date
+                        fitted$type = "ajuste"
+                        fitted = rename(fitted, value = confirmed)
+                        # Puntual predict
+                        punt_pred = data.frame(
+                          date = tail(seq.Date(from = date, by = "day", length.out = 16),-1),
+                          confirmed = forecast(auto_model, 15)$mean %>% as.numeric())
+                        punt_pred$last_date_train = date
+                        punt_pred$type = "prediccion"
+                        punt_pred = punt_pred[c("date", "confirmed", "last_date_train", "type")]
+                        punt_pred = rename(punt_pred, value = confirmed)
+                        
+                        return(bind_rows(fitted, punt_pred))
+                      })
+results_auto = bind_rows(results_auto)
+results_auto$model = "Auto Arima"
+
+# NN MODEL ------
+library(forecast)
+iso = "MD"
+last_date_use = as.Date("2021-04-01")
+df = readRDS("data_app/historical.rds")
+params = readRDS("data_app/params_isos.rds")
+df = df[df$iso == iso,]
+params = params[params$iso == iso,]
+
+
+dates_test = test_sets$last_date_train
+
+nn_model = nnetar(ts(df[df$date <= dates_test[1],]$confirmed, frequency = 7),
+                  P = 1, size = 50, lambda = "auto", scale.inputs = TRUE)
+
+results_nn = lapply(dates_test,
+                    function(date) {
+                      dg = df[df$date <= date,]
+                      
+                      # Initialize model ------
+                      nn_model = nnetar(ts(dg$confirmed, frequency = 7),
+                                        model = nn_model)
+                      
+                      
+                      
+                      # Fitted series
+                      fitted = data.frame(
+                        date = dg$date, 
+                        confirmed = nn_model$fitted %>% as.numeric())
+                      fitted = filter(fitted, date >= as.Date("2020-06-24"))
+                      fitted$last_date_train = date
+                      fitted$type = "ajuste"
+                      fitted = rename(fitted, value = confirmed)
+                      # Puntual predict
+                      punt_pred = data.frame(
+                        date = tail(seq.Date(from = date, by = "day", length.out = 16),-1),
+                        confirmed = forecast(nn_model, 15)$mean %>% as.numeric())
+                      punt_pred$last_date_train = date
+                      punt_pred$type = "prediccion"
+                      punt_pred = punt_pred[c("date", "confirmed", "last_date_train", "type")]
+                      punt_pred = rename(punt_pred, value = confirmed)
+                      
+                      return(bind_rows(fitted, punt_pred))
+                    })
+results_nn = bind_rows(results_nn)
+results_nn$model = "Neural Network"
 
 # PREDICCIONES ------
-results = bind_rows(results_beatriz, results_jose, resultados_sir)
+results = bind_rows(results_beatriz, results_jose, resultados_sir, results_auto, results_nn)
 results = filter(results, last_date_train != as.Date("2020-08-01"))
 real = df %>% dplyr::select(date, confirmed) %>% rename(real = confirmed)
 results = left_join(results, real, by = "date")
 cols_proj =  c("Non linear regression model (MATGEN)" = "#999999",
                "Error correction model (MATGEN)" = "#6699CC",
-               "SIR" = "#FF9966")
+               "SIR" = "#FF9966",
+               "Auto Arima" = "#CC6699",
+               "Neural Network" = "#66FF99")
 results = results[results$date >= as.Date("2020-07-09"),]
 
 ## Puntuales --------
@@ -130,12 +226,12 @@ results %>%
         legend.title = element_blank(),
         axis.text.x = element_text(angle = 90)) + 
   scale_color_manual(values = cols_proj) + 
-  ylim(0, 10000)+
+  ylim(0, 11000)+
   scale_x_date(labels = scales::date_format("%d-%m")) 
 
 ggplot2::ggsave(filename = "article_results/images/comparative_model_plots/puntual_forecast.png",
                 height=8, width = 10)
-  
+
 
 results %>%
   filter(type == "ajuste") %>%
@@ -168,7 +264,7 @@ results %>%
   group_by(last_date_train, model, type) %>%
   summarise(
     forecast::accuracy(real, value) %>% as.data.frame(),
-    # R2 = cor(value, real)^2
+    #R2 = cor(value, real)^2
     R2 = 1 - (mean((real - value)^2)/var(real))
   ) %>%
   mutate(
@@ -449,6 +545,31 @@ picos = bind_rows(picos)
 picos = arrange(picos, dates)
 
 
+### AUTOARIMA ------
+
+picos_auto = lapply(dates_test,
+                    function(x) {
+                      x = as.Date(x)
+                      dg = df[df$date <= x,]
+                      dh = df[df$date >= as.Date("2020-06-24"),]
+                      dh = dh[dh$date <= (x + lubridate::days(15)),]
+                      
+                      auto_model = Arima(ts(dg$confirmed, frequency = 7),
+                                         model = auto_model)
+                      
+                      pred = data.frame(
+                        date = tail(seq.Date(from = x, by = "day", length.out = 101),-1),
+                        confirmed = forecast(auto_model, 100)$mean %>% as.numeric())
+                      pred = bind_rows(dg[dg$date >=  as.Date("2020-06-24"), colnames(pred)], pred)  
+                      data.frame(
+                        dates = x,
+                        prediccion_pico_arima = pred$date[which.max(pred$confirmed)],
+                        real = dh$date[which.max(dh$confirmed)]
+                      )
+                    })
+picos_auto = bind_rows(picos_auto)
+
+
 ### SIR-----
 resultados_sir = names(loutFinal) %>%
   lapply(function(x) {
@@ -465,7 +586,7 @@ resultados_sir = names(loutFinal) %>%
 resultados_sir$model = "SIR"
 resultados_sir$date = as.Date(resultados_sir$date)
 resultados_sir$last_date_train = as.Date(resultados_sir$last_date_train)
-  
+
 picos_sir = resultados_sir %>%
   group_by(model, last_date_train) %>%
   slice(which.max(value)) %>%
@@ -489,19 +610,23 @@ picos_beatriz$dates = as.Date(picos_beatriz$dates - lubridate::days(1))
 picos_beatriz$fecha_estimada_beatriz = as.Date(as.Date("2020-06-24") + lubridate::days(picos_beatriz$n_estimado_beatriz))
 picos = left_join(picos, picos_beatriz, by = "dates")
 picos = left_join(picos, picos_sir, by = "dates")
+picos_auto$real = NULL
+picos = left_join(picos, picos_auto, by = "dates")
 
 ### Comparativa ------
 
 picos %>%
-  dplyr::select(dates, real, prediccion_pico, fecha_estimada_beatriz, fecha_estimada_sir) %>%
+  dplyr::select(dates, real, prediccion_pico, fecha_estimada_beatriz,
+                fecha_estimada_sir, prediccion_pico_arima) %>%
   rename(
     `Error correction model (MATGEN)` = prediccion_pico,
     `Non linear regression model (MATGEN)` = fecha_estimada_beatriz,
-    SIR = fecha_estimada_sir) %>%
+    SIR = fecha_estimada_sir,
+    `Auto Arima` = prediccion_pico_arima) %>%
   tidyr::pivot_longer(c(-dates, -real), names_to = "Legend") %>%
   ggplot() + 
-  geom_point(aes(x = dates, y = real), size = 2) +
-  geom_line(aes(x = dates, y = real), size = 1, linetype = "dashed") +
+  # geom_point(aes(x = dates, y = real), size = 2) +
+  # geom_line(aes(x = dates, y = real), size = 1, linetype = "dashed") +
   
   geom_point(aes(x = dates, y = value, col = Legend), size = 2) +
   geom_line(aes(x = dates, y = value, col = Legend), size = 1, linetype = "dashed") +
@@ -518,7 +643,8 @@ picos %>%
   ) + 
   scale_color_manual(values = cols_proj) +
   geom_vline(xintercept = as.Date("2020-09-18"), size = 1) +
-  geom_text(x = as.Date("2020-09-16"), y = as.Date("2020-08-30"),
+  geom_hline(yintercept = as.Date("2020-09-18", size = 1)) +
+  geom_text(x = as.Date("2020-09-16"), y = as.Date("2020-10-30"),
             label = "Real peak: 2020-09-18", angle = 90,
             size = 4)
 
