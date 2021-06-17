@@ -296,7 +296,6 @@ results %>%
   group_by(last_date_train, model, type) %>%
   summarise(
     forecast::accuracy(real, value) %>% as.data.frame(),
-    # R2 = cor(value, real)^2
     R2 = 1 - (mean((real - value)^2)/var(real))
   ) %>%
   ungroup() %>%
@@ -315,7 +314,6 @@ results %>%
   group_by(last_date_train, model, type) %>%
   summarise(
     forecast::accuracy(real, value) %>% as.data.frame(),
-    # R2 = cor(value, real)^2
     R2 = 1 - (mean((real - value)^2)/var(real))
   ) %>%
   ungroup() %>%
@@ -328,21 +326,6 @@ results %>%
   print(include.rownames=FALSE)
 
 
-
-
-# results %>%
-#   group_by(last_date_train, model, type) %>%
-#   summarise(
-#     R2 = cor(value, real)^2,
-#     R2_beatriz = 1 - (mean((real - value)^2)/var(real))
-#   ) %>%
-#   ggplot()+ 
-#   geom_boxplot(aes(x = type, y = R2_beatriz, fill = model)) +
-#   theme_light() +
-#   ylab(TeX("R^{2}")) + 
-#   xlab("") + 
-#   theme(text = element_text(face = "bold")) + 
-#   ggtitle(TeX("Comparing R^{2}"))
 
 results %>%
   group_by(model, type) %>%
@@ -453,7 +436,6 @@ results %>% mutate(
   group_by(last_date_train, model, type) %>%
   summarise(
     forecast::accuracy(real, value) %>% as.data.frame(),
-    # R2 = cor(value, real)^2
     R2 = 1 - (mean((real - value)^2)/var(real))
   ) %>%
   ungroup() %>%
@@ -475,7 +457,6 @@ results %>% mutate(
   group_by(last_date_train, model, type) %>%
   summarise(
     forecast::accuracy(real, value) %>% as.data.frame(),
-    # R2 = cor(value, real)^2
     R2 = 1 - (mean((real - value)^2)/var(real))
   ) %>%
   ungroup() %>%
