@@ -4,7 +4,7 @@ library(latex2exp)
 library(ggplot2)
 library(lubridate)
 source("CODE/functions/models_definition.R")
-source("CODE/functions/forecast_plot.R", encoding = "UTF8")
+# source("CODE/functions/forecast_plot.R", encoding = "UTF8")
 load("article_results/list_output_datesokFinal.rdata")
 # BEATRIZs MODEL ------
 results_beatriz = list.dirs("article_results/ArticuloResultados", recursive = TRUE)  %>%
